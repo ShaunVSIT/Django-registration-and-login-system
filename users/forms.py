@@ -1,22 +1,13 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.core.exceptions import ValidationError
+import re
 
 from .models import Profile
 
-
 class RegisterForm(UserCreationForm):
     # fields we want to include and customize in our form
-    first_name = forms.CharField(max_length=100,
-                                 required=True,
-                                 widget=forms.TextInput(attrs={'placeholder': 'First Name',
-                                                               'class': 'form-control',
-                                                               }))
-    last_name = forms.CharField(max_length=100,
-                                required=True,
-                                widget=forms.TextInput(attrs={'placeholder': 'Last Name',
-                                                              'class': 'form-control',
-                                                              }))
     username = forms.CharField(max_length=100,
                                required=True,
                                widget=forms.TextInput(attrs={'placeholder': 'Username',
@@ -43,7 +34,7 @@ class RegisterForm(UserCreationForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'username', 'email', 'password1', 'password2']
+        fields = ['username', 'email', 'password1', 'password2']
 
 
 class LoginForm(AuthenticationForm):
@@ -86,3 +77,25 @@ class UpdateProfileForm(forms.ModelForm):
     class Meta:
         model = Profile
         fields = ['avatar', 'bio']
+
+def validate_not_malicious(value):
+    # Define patterns to check for malicious input
+    patterns = [
+        r'<script.*?>.*?</script>',   # Enhanced check for <script> tags
+        r'drop\s+table',  # Naive check for SQL DROP TABLE statements
+        # ... Add other patterns you're concerned about
+        r'script',
+        r'/\w*((\%27)|(\'))((\%6F)|o|(\%4F))((\%72)|r|(\%52))/ix',
+    ]
+    # Check each pattern against the input value
+    for pattern in patterns:
+        if re.search(pattern, value, re.IGNORECASE):
+            raise ValidationError('Potential XSS or SQL injection detected. This is your final warning')
+
+class SearchForm(forms.Form):
+    search = forms.CharField(
+        max_length=100,
+        required=True,
+        validators=[validate_not_malicious],
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Search...'})
+    )
